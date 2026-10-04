@@ -1,0 +1,9 @@
+# Java / Maven / IntelliJ (se regeneran al compilar o al abrir el proyecto)
+**/target/
+**/out/
+**/.idea/
+**/*.iml
+
+# Sistema operativo
+Thumbs.db
+.DS_Store
