@@ -12,6 +12,17 @@ import java.util.List;
 /**
  * Capa de PRESENTACIÓN: recibe HTTP, valida, delega en el service y devuelve el código de estado.
  * No tiene lógica de negocio ni toca repositorios.
+ *
+ * Chuleta de anotaciones:
+ *  - @RestController: lo que devuelve cada método se convierte a JSON (Jackson) en el cuerpo de la respuesta.
+ *  - @RequestMapping("/api/clientes"): prefijo común de todas las rutas de esta clase.
+ *  - @PathVariable: coge un trozo de la URL (p. ej. el {id} de /api/clientes/{id}/pedidos).
+ *  - @RequestBody: convierte el JSON del cuerpo de la petición en un DTO (record).
+ *  - @Valid: comprueba las anotaciones del DTO (@NotBlank, @NotNull...). Si falla -> 400 (GlobalExceptionHandler).
+ *  - Si un método devuelve un objeto/lista "a secas", Spring responde 200 OK.
+ *    Para devolver otro código (201 Created) se usa ResponseEntity.status(...).body(...).
+ *  - Los 404 y 409 no se ven aquí: el service lanza una excepción y GlobalExceptionHandler la traduce.
+ *  - Nunca se devuelven entidades, solo DTOs (así no salen bucles JSON Cliente <-> Pedido).
  */
 @RestController
 @RequestMapping("/api/clientes")
@@ -19,6 +30,7 @@ public class ClienteController {
 
     private final ClienteService service;
 
+    // Inyección por constructor: Spring crea el ClienteService y nos lo pasa (no hacemos "new")
     public ClienteController(ClienteService service) {
         this.service = service;
     }

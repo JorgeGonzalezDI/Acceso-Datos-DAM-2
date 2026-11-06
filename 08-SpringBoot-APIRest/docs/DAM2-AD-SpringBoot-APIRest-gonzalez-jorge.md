@@ -9,6 +9,12 @@ Arquitectura por capas (separación de responsabilidades, SoC): cada capa solo h
 
 `Controller → Service → Mapper / Repository → Base de datos`
 
+**¿DAO o Repository?** Se usa el patrón **Repository** de Spring Data JPA. En un DAO clásico escribimos a mano
+una interfaz y su clase (`ClienteDAOImpl`) con el SQL/JPQL de cada operación. Aquí solo declaramos la interfaz
+(`ClienteRepository extends JpaRepository<Cliente, Long>`): Spring genera la implementación al arrancar, con el
+CRUD (`findAll`, `findById`, `save`...) y las consultas derivadas del nombre del método. El repository cumple el
+papel del DAO (capa de acceso a datos) sin código repetitivo.
+
 | Paquete (`src/main/java/com/jorge/apirest/...`) | Capa | Qué hace |
 |---|---|---|
 | `controller` (`ClienteController`) | **Presentación** | Recibe las peticiones HTTP, valida el JSON (`@Valid`), llama al service y devuelve el código de estado (200, 201...). Sin lógica de negocio. |
@@ -27,29 +33,41 @@ Método elegido: `GET /api/clientes/codigo/{codigo}`, con el caso correcto (200)
 
 ## 3. Inventario de pruebas ejecutadas
 
-Todas se lanzan con `pruebas\pruebas-curl.ps1` (usa `curl.exe` contra `http://localhost:8080`).
-Rellena la columna **Obtenido** con el código que imprime el script y marca ✔ si coincide con el esperado.
+Pruebas ejecutadas el **06/11/2026** con `curl.exe -i` desde PowerShell, con la API arrancada
+(`java -jar target/apirest-1.0.0.jar`) contra la MySQL de Docker (puerto 3307).
+La columna **Obtenido** es la primera línea de la respuesta (`HTTP/1.1 <código>`).
 
-| # | Prueba | Petición | Esperado | Obtenido | OK |
-|---|---|---|---|---|---|
-| 1 | Listar clientes | `GET /api/clientes` | 200 | | |
-| 2 | Listar activos ordenados por código | `GET /api/clientes/activos` | 200 | | |
-| 3 | Cliente por código existente | `GET /api/clientes/codigo/CLI-001` | 200 | | |
-| 4 | Cliente por código inexistente | `GET /api/clientes/codigo/NOEXISTE` | 404 | | |
-| 5 | Clientes de tipo EMPRESA | `GET /api/clientes/empresa` | 200 | | |
-| 6 | Pedidos de un cliente | `GET /api/clientes/1/pedidos` | 200 | | |
-| 7 | Pedidos de cliente inexistente | `GET /api/clientes/99999/pedidos` | 404 | | |
-| 8 | Crear cliente | `POST /api/clientes` | 201 | | |
-| 9 | Crear cliente con código repetido | `POST /api/clientes` | 409 | | |
-| 10 | Crear cliente sin código | `POST /api/clientes` | 400 | | |
-| 11 | Crear pedido a cliente existente | `POST /api/clientes/1/pedidos` | 201 | | |
-| 12 | Crear pedido a cliente inexistente | `POST /api/clientes/99999/pedidos` | 404 | | |
-| 13 | Crear pedido con total negativo | `POST /api/clientes/1/pedidos` | 400 | | |
-| 14 | Cliente nuevo + pedido en una petición | `POST /api/clientes/con-pedido` | 201 | | |
-| 15 | `con-pedido` con cliente ya existente (no lo duplica) | `POST /api/clientes/con-pedido` | 201 | | |
-| 16 | `con-pedido` sin pedido | `POST /api/clientes/con-pedido` | 400 | | |
+| # | Prueba | Petición | Cuerpo enviado | Esperado | Obtenido | Resultado |
+|---|---|---|---|---|---|---|
+| 1 | Listar clientes | `GET /api/clientes` | — | 200 | 200 | ✔ OK |
+| 2 | Activos ordenados por código | `GET /api/clientes/activos` | — | 200 | 200 | ✔ OK |
+| 3 | Cliente por código existente | `GET /api/clientes/codigo/CLI-001` | — | 200 | 200 | ✔ OK |
+| 4 | Cliente por código inexistente | `GET /api/clientes/codigo/NOEXISTE` | — | 404 | 404 | ✔ OK |
+| 5 | Clientes de tipo EMPRESA | `GET /api/clientes/empresa` | — | 200 | 200 | ✔ OK |
+| 6 | Pedidos de un cliente | `GET /api/clientes/1/pedidos` | — | 200 | 200 | ✔ OK |
+| 7 | Pedidos de cliente inexistente | `GET /api/clientes/99999/pedidos` | — | 404 | 404 | ✔ OK |
+| 8 | Crear cliente | `POST /api/clientes` | `{"codigo":"CLI-100","tipo":"EMPRESA"}` | 201 | 201 | ✔ OK |
+| 9 | Crear cliente con código repetido | `POST /api/clientes` | `{"codigo":"CLI-001","tipo":"PERSONA"}` | 409 | 409 | ✔ OK |
+| 10 | Crear cliente sin código (inválido) | `POST /api/clientes` | `{"tipo":"PERSONA"}` | 400 | 400 | ✔ OK |
+| 11 | Crear pedido a cliente existente | `POST /api/clientes/1/pedidos` | `{"total":50.25}` | 201 | 201 | ✔ OK |
+| 12 | Crear pedido a cliente inexistente | `POST /api/clientes/99999/pedidos` | `{"total":10}` | 404 | 404 | ✔ OK |
+| 13 | Crear pedido con total negativo | `POST /api/clientes/1/pedidos` | `{"total":-5}` | 400 | 400 | ✔ OK |
+| 14 | Cliente nuevo + pedido (misma transacción) | `POST /api/clientes/con-pedido` | `{"cliente":{"codigo":"CLI-200","tipo":"EMPRESA"},"pedido":{"total":99.90}}` | 201 | 201 | ✔ OK |
+| 15 | `con-pedido` con cliente ya existente (no lo duplica) | `POST /api/clientes/con-pedido` | `{"cliente":{"codigo":"CLI-001","tipo":"PERSONA"},"pedido":{"total":10}}` | 201 | 201 | ✔ OK |
+| 16 | `con-pedido` sin pedido (inválido) | `POST /api/clientes/con-pedido` | `{"cliente":{"codigo":"CLI-300","tipo":"PERSONA"}}` | 400 | 400 | ✔ OK |
 
-Además hay 16 tests automáticos (`ClienteApiTest`, MockMvc + H2) que cubren los mismos casos: `mvn test`.
+**Resultado: 16/16 pruebas correctas.**
+
+Ejemplo de comando en PowerShell (en PowerShell hay que escribir `curl.exe`, porque `curl` a secas es un alias
+de `Invoke-WebRequest`; y las comillas del JSON van escapadas con `\"`):
+
+```powershell
+curl.exe -i http://localhost:8080/api/clientes/codigo/CLI-001
+curl.exe -i -X POST http://localhost:8080/api/clientes -H "Content-Type: application/json" -d '{\"codigo\":\"CLI-100\",\"tipo\":\"EMPRESA\"}'
+```
+
+Además, el proyecto tiene 16 tests automáticos (`ClienteApiTest`, MockMvc + BD H2 en memoria) que cubren
+los mismos casos: `mvn clean test` → `Tests run: 16, Failures: 0, Errors: 0`.
 
 ## 4. Cómo ejecutar
 
@@ -59,4 +77,8 @@ Además hay 16 tests automáticos (`ClienteApiTest`, MockMvc + H2) que cubren lo
 
 ## 5. Evidencias
 
-Carpeta `evidencias/`: capturas de pantalla completa con `curl.exe -i` (se ve el código de estado HTTP).
+Carpeta `evidencias/`: capturas de pantalla completa (barra de tareas con el reloj y prompt de la terminal visibles)
+de dos peticiones distintas hechas con `curl.exe -i`, donde se ve la línea `HTTP/1.1 <código>` devuelta por el servidor:
+
+- `evidencias/01-curl-get-cliente-codigo-200.png` → `GET /api/clientes/codigo/CLI-001` → **HTTP/1.1 200** (06/11/2026 19:56)
+- `evidencias/02-curl-post-cliente-201.png` → `POST /api/clientes` (cliente nuevo `CLI-102`) → **HTTP/1.1 201** (06/11/2026 19:57)
